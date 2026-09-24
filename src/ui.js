@@ -6,20 +6,24 @@ const narrow = window.matchMedia('(max-width:640px)');
 const stacked = window.matchMedia('(max-width:1060px)');
 
 function setHTML(el, html) { if (el._h !== html) { el.innerHTML = html; el._h = html; } }
-function cardHTML(c, size = '', extra = '') {
-  return `<div class="card ${SUIT_CLASS[suitOf(c)]} ${size} ${extra}" role="img" aria-label="${RANK_NAME[rankOf(c)]} of ${SUIT_WORD[suitOf(c)]}"><span class="r">${rankLabel(rankOf(c))}</span><span class="s">${SUIT_SYM[suitOf(c)]}</span></div>`;
+function cardHTML(c, extra = '') {
+  const s = suitOf(c);
+  return `<div class="card ${SUIT_CLASS[s]} ${extra}" role="img" aria-label="${RANK_NAME[rankOf(c)]} of ${SUIT_WORD[s]}"><span class="r">${rankLabel(rankOf(c))}</span><span class="cs">${SUIT_SYM[s]}</span><span class="cb">${SUIT_SYM[s]}</span></div>`;
 }
-const backHTML = size => `<div class="card back ${size}" role="img" aria-label="Face-down card"></div>`;
-const sigilHTML = p => p.human ? `<div class="sigil" style="--c:var(--paper)">Y</div>` : `<div class="sigil" style="--c:${PERSONAS[p.persona].color}">${PERSONAS[p.persona].sigil}</div>`;
+const backHTML = () => '<div class="card back" role="img" aria-label="Face-down card"></div>';
+const avatarHTML = p => p.human
+  ? `<div class="avatar" style="--c:var(--accent);font-family:var(--suit)" aria-hidden="true">${SUIT_SYM[0]}</div>`
+  : `<div class="avatar" style="--c:${PERSONAS[p.persona].color}" aria-hidden="true">${PERSONAS[p.persona].sigil}</div>`;
 
+/* ---------- table ---------- */
 function buildTable() {
   const t = $('table');
   G.players.forEach((p, i) => {
     const s = document.createElement('div');
     s.className = `seat s${i}${p.human ? ' hero' : ''}`;
-    s.innerHTML = `<div class="hole"></div><div class="plate">${sigilHTML(p)}<div class="who"><b>${p.name}</b><span></span></div></div><div class="bubble"></div><div class="sd"></div>`;
+    s.innerHTML = `<div class="cards"></div><div class="plate">${avatarHTML(p)}<div class="meta"><span class="nm">${p.name}</span><span class="stk"></span></div></div><div class="pill"></div>`;
     t.appendChild(s);
-    els.seats[i] = { root: s, hole: s.querySelector('.hole'), stack: s.querySelector('.who span'), bubble: s.querySelector('.bubble'), sd: s.querySelector('.sd') };
+    els.seats[i] = { root: s, cards: s.querySelector('.cards'), stk: s.querySelector('.stk'), pill: s.querySelector('.pill') };
     const b = document.createElement('div'); b.className = 'bet'; b.hidden = true; t.appendChild(b); els.bets[i] = b;
   });
   const d = document.createElement('div'); d.className = 'dbtn'; d.textContent = 'D'; d.setAttribute('aria-label', 'Dealer button');
@@ -27,8 +31,8 @@ function buildTable() {
 }
 function placeChips() {
   const m = narrow.matches;
-  const BETS = m ? [[50, 67], [31, 62], [22, 31], [78, 31], [69, 62]] : [[50, 68], [24, 57], [31, 28], [69, 28], [76, 57]];
-  const DB = m ? [[77, 80], [9, 52], [36, 12], [64, 12], [91, 52]] : [[63, 79], [19, 49], [33, 14], [67, 14], [81, 49]];
+  const BETS = m ? [[50, 64], [12, 52], [23, 31], [77, 31], [88, 52]] : [[50, 66], [23, 56], [32, 28], [68, 28], [77, 56]];
+  const DB = m ? [[74, 88], [31, 62], [36, 12], [64, 12], [69, 62]] : [[62.5, 88], [19, 57], [34, 10], [66, 10], [81, 57]];
   els.bets.forEach((b, i) => { b.style.left = BETS[i][0] + '%'; b.style.top = BETS[i][1] + '%'; });
   els.dbtn.style.left = DB[G.dealer][0] + '%'; els.dbtn.style.top = DB[G.dealer][1] + '%';
 }
@@ -43,35 +47,35 @@ function renderTable() {
   const winners = new Set((G.result ? G.result.winners : []).map(w => w.id));
   G.players.forEach((p, i) => {
     const S = els.seats[i];
-    const mine = !G.over && G.toAct === i && (G.thinking === i || (p.human && G.waitingHuman));
-    S.root.classList.toggle('active', mine);
+    S.root.classList.toggle('active', !G.over && G.toAct === i && (G.thinking === i || (p.human && G.waitingHuman)));
     S.root.classList.toggle('folded', p.folded && !p.human);
     S.root.classList.toggle('winner', G.over && winners.has(i));
     let cards = '';
     if (p.hole.length) {
-      if (p.human) cards = p.hole.map(c => cardHTML(c, 'xl', p.folded ? 'dim' : '')).join('');
-      else if (p.shown) cards = p.hole.map(c => cardHTML(c, 'sm')).join('');
-      else if (!p.folded) cards = backHTML('sm') + backHTML('sm');
+      if (p.human) cards = p.hole.map(c => cardHTML(c, p.folded ? 'dim' : '')).join('');
+      else if (p.shown) cards = p.hole.map(c => cardHTML(c)).join('');
+      else if (!p.folded) cards = backHTML() + backHTML();
     }
-    setHTML(S.hole, cards);
-    setHTML(S.stack, `${p.allIn && !G.over ? 'All-in' : fmt(p.stack)} · <em class="ps">${positionOf(i)}</em>`);
-    let bub = '', cls = 'bubble';
-    if (G.thinking === i) bub = '<span class="dots" aria-label="Thinking"><i></i><i></i><i></i></span>';
-    else if (G.over && winners.has(i)) { bub = `Wins ${fmt(p.won)}`; cls += ' win'; }
-    else { bub = p.lastAction; if (/bet|raise|all-in/i.test(bub)) cls += ' hot'; }
-    S.bubble.className = cls; setHTML(S.bubble, bub);
-    setHTML(S.sd, p.shown && p.handDesc ? `<span class="showname">${p.handDesc}</span>` : '');
+    setHTML(S.cards, cards);
+    setHTML(S.stk, (p.allIn && !G.over ? 'All-in' : fmt(p.stack)) + (p.human && G.handNo ? `<span class="ps">${positionOf(i)}</span>` : ''));
+    let pill = '', cls = 'pill';
+    const cat = p.shown && p.handDesc ? CAT_NAME[catOf(p.value)] : '';
+    if (G.thinking === i) pill = '<span class="dots" aria-label="Thinking"><i></i><i></i><i></i></span>';
+    else if (G.over && winners.has(i)) { pill = `Wins ${fmt(p.won)}${cat ? ' · ' + cat : ''}`; cls += ' win'; }
+    else if (G.over && cat) { pill = cat; cls += ' hand'; }
+    else if (!(G.over && p.folded)) { pill = p.lastAction; if (/bet|raise|all-in/i.test(pill)) cls += ' hot'; }
+    S.pill.className = cls; setHTML(S.pill, pill);
     const b = els.bets[i];
     b.hidden = !(p.bet > 0);
     if (p.bet > 0) setHTML(b, `<span class="chip"></span>${fmt(p.bet)}`);
   });
   placeChips();
   const slots = [];
-  for (let k = 0; k < 5; k++) slots.push(G.board[k] !== undefined ? cardHTML(G.board[k], 'lg') : '<div class="slot"></div>');
+  for (let k = 0; k < 5; k++) slots.push(G.board[k] !== undefined ? cardHTML(G.board[k]) : '<div class="slot"></div>');
   setHTML($('board'), slots.join(''));
-  $('street').textContent = G.over ? (G.result && G.board.length === 5 && G.players.filter(p => !p.folded).length > 1 ? 'Showdown' : 'Hand over') : STREETS[G.street];
-  const pot = potNow();
-  setHTML($('pot'), !G.over && pot > 0 ? `<span class="chip"></span>Pot ${fmt(pot)}` : '');
+  const pot = potNow(), potEl = $('pot');
+  potEl.classList.toggle('empty', G.over || !pot);
+  setHTML(potEl, `<span class="chip"></span><small>POT</small>${fmt(pot)}`);
   const ban = $('banner');
   ban.hidden = !G.result;
   if (G.result) setHTML(ban, G.result.text.replace(/(You|The \w+)( wins?)/g, '<b>$1</b>$2'));
@@ -83,28 +87,25 @@ function renderKpis() {
   $('kStack').textContent = fmt(h.stack);
   const net = h.stack - START_STACK * h.buyins + (G.over ? 0 : h.total);
   const k = $('kNet');
-  k.textContent = (net > 0 ? '+' : '') + fmt(net);
+  k.textContent = (net > 0 ? '+' : net < 0 ? '−' : '') + fmt(Math.abs(net));
   k.className = net > 0 ? 'pos' : net < 0 ? 'neg' : '';
-  $('kAgree').textContent = G.stats.decisions ? `${G.stats.agreed} of ${G.stats.decisions}` : '—';
 }
 
-/* ---------- action bar ---------- */
+/* ---------- action dock ---------- */
 function myTurn() { return G.waitingHuman && G.toAct === 0 && !G.over; }
 function raiseBounds() {
   const h = G.players[0];
   const max = h.bet + h.stack;
   const min = Math.min(G.currentBet + G.minRaise, max);
-  const othersCanAct = G.players.some(p => !p.human && canAct(p));
-  return { min, max, can: myTurn() && h.stack > G.currentBet - h.bet && othersCanAct };
+  return { min, max, can: myTurn() && h.stack > G.currentBet - h.bet && G.players.some(p => !p.human && canAct(p)) };
 }
 function presetList() {
   const h = G.players[0];
-  const max = h.bet + h.stack;
   const L = [];
   if (G.street === 0 && G.raiseCount === 0) L.push(['2.5 BB', clampTo(h, BB * 2.5)], ['3 BB', clampTo(h, BB * 3)], ['4 BB', clampTo(h, BB * 4)]);
   else if (G.street === 0) L.push(['3×', clampTo(h, G.currentBet * 3)], ['4×', clampTo(h, G.currentBet * 4)]);
-  else L.push(['⅓ pot', potBet(h, 1 / 3)], ['½ pot', potBet(h, .5)], ['⅔ pot', potBet(h, 2 / 3)], ['Pot', potBet(h, 1)]);
-  L.push(['All-in', max]);
+  else L.push(['⅓', potBet(h, 1 / 3)], ['½', potBet(h, .5)], ['⅔', potBet(h, 2 / 3)], ['Pot', potBet(h, 1)]);
+  L.push(['All-in', h.bet + h.stack]);
   return L;
 }
 function setAmount(v) {
@@ -119,35 +120,32 @@ function renderActions() {
   const h = G.players[0];
   const my = myTurn();
   const toCall = Math.max(0, G.currentBet - h.bet);
+  const rb = raiseBounds();
   $('bNext').hidden = !G.over;
   $('actBtns').hidden = G.over;
-  $('sizer').hidden = G.over;
+  $('sizer').hidden = G.over || !rb.can;
   $('bTip').disabled = !my;
   const st = $('status');
-  if (G.over) setHTML(st, "<b>Hand over.</b> Deal the next one when you're ready.");
-  else if (my) setHTML(st, `<b>Your turn.</b> ${toCall ? `${fmt(toCall)} to call` : 'No bet to you'} · pot ${fmt(potNow())}`);
-  else if (h.folded) setHTML(st, 'You folded. Watch how the bots play it out.');
-  else if (G.thinking >= 0) setHTML(st, `Waiting for <b>${G.players[G.thinking].name}</b>…`);
-  else setHTML(st, h.allIn ? "You're all-in. Running out the board…" : 'Dealing…');
+  if (G.over) {
+    const d = h.won - h.total;
+    setHTML(st, d > 0 ? `You won <b>+${fmt(d)}</b> this hand.` : d < 0 ? `You lost <b>${fmt(-d)}</b> this hand.` : 'Hand over.');
+  } else if (my) setHTML(st, `<b>Your turn</b> · ${toCall ? `${fmt(toCall)} to call` : 'no bet to you'}`);
+  else if (h.folded) setHTML(st, 'You folded. Watching the rest of the hand.');
+  else if (G.thinking >= 0) setHTML(st, `<b>${G.players[G.thinking].name}</b> is thinking…`);
+  else setHTML(st, h.allIn ? 'Running out the board…' : 'Dealing…');
 
   const bF = $('bFold'), bC = $('bCall'), bR = $('bRaise');
   bF.disabled = !my || toCall === 0;
   bF.title = toCall === 0 ? 'Checking is free, so there is no reason to fold' : '';
-  setHTML(bC, (toCall ? (toCall >= h.stack ? `Call all-in ${fmt(h.stack)}` : `Call ${fmt(toCall)}`) : 'Check') + '<kbd>C</kbd>');
+  bC.textContent = toCall ? (toCall >= h.stack ? `Call all-in ${fmt(h.stack)}` : `Call ${fmt(toCall)}`) : 'Check';
   bC.disabled = !my;
-  const rb = raiseBounds();
   if (ui.amount < rb.min || ui.amount > rb.max) ui.amount = rb.min;
   bR.disabled = !rb.can;
-  const allIn = ui.amount >= rb.max;
-  setHTML(bR, (allIn ? `All-in ${fmt(rb.max)}` : G.currentBet === 0 ? `Bet ${fmt(ui.amount)}` : `Raise to ${fmt(ui.amount)}`) + '<kbd>R</kbd>');
-  const sz = $('sizer');
-  sz.classList.toggle('off', !rb.can);
-  const r = $('rAmt'), n = $('nAmt');
-  r.min = rb.min; r.max = rb.max; r.value = ui.amount;
-  n.min = rb.min; n.max = rb.max; if (document.activeElement !== n) n.value = ui.amount;
-  r.disabled = n.disabled = !rb.can;
+  bR.textContent = ui.amount >= rb.max ? `All-in ${fmt(rb.max)}` : G.currentBet === 0 ? `Bet ${fmt(ui.amount)}` : `Raise to ${fmt(ui.amount)}`;
+  const r = $('rAmt');
+  r.min = rb.min; r.max = rb.max; r.value = ui.amount; r.disabled = !rb.can;
   const pl = rb.can ? presetList() : [];
-  setHTML($('presets'), pl.map(([l, v]) => `<button class="preset" type="button" data-v="${v}"${v < rb.min ? ' disabled' : ''}>${l}</button>`).join(''));
+  setHTML($('presets'), pl.map(([l, v]) => `<button type="button" data-v="${v}" class="${v === ui.amount ? 'on' : ''}"${v < rb.min ? ' disabled' : ''}>${l}</button>`).join(''));
 }
 
 function humanAct(type) {
@@ -160,78 +158,87 @@ function humanAct(type) {
     if (j.level === 'good' || (adv.close && j.level !== 'leak')) G.stats.agreed++;
     if (j.level === 'leak') G.stats.leaks++;
     log(`Coach: ${j.text}`, j.level === 'leak' ? 'leak' : '');
-    if ($('optAlerts').checked) showAlert(j.level, { good: 'Good play', ok: 'Worth knowing', leak: 'Leak' }[j.level], j.text);
-    else $('alert').hidden = true;
+    if ($('optAlerts').checked) showToast(j.level, { good: 'Good play', ok: 'Worth knowing', leak: 'Leak' }[j.level], j.text);
+    else $('toast').hidden = true;
   }
   act(G.players[0], type, type === 'raise' ? ui.amount : 0);
 }
-function showAlert(level, tag, text) {
-  const a = $('alert');
-  a.className = `alert ${level}`;
-  a.innerHTML = `<span class="tag">${tag}</span><span>${text}</span>`;
-  a.hidden = false;
+function showToast(level, title, html) {
+  const t = $('toast');
+  t.className = `toast ${level}`;
+  t.innerHTML = `<span class="dot"></span><div><b>${title}.</b> ${html}</div><button class="x" type="button" aria-label="Dismiss">×</button>`;
+  t.hidden = false;
 }
 
 function onHumanTurn() {
   const h = G.players[0];
-  let d;
-  if (G.street === 0 && G.raiseCount === 0) d = clampTo(h, BB * 2.5 + G.players.filter(p => !p.human && p.actions.some(a => a.type === 'call')).length * BB);
-  else if (G.street === 0) d = clampTo(h, G.currentBet * 3);
-  else d = potBet(h, 2 / 3);
-  ui.amount = d;
+  if (G.street === 0 && G.raiseCount === 0) ui.amount = clampTo(h, BB * 2.5 + G.players.filter(p => !p.human && p.actions.some(a => a.type === 'call')).length * BB);
+  else if (G.street === 0) ui.amount = clampTo(h, G.currentBet * 3);
+  else ui.amount = potBet(h, 2 / 3);
   renderActions();
 }
 function onHandOver() { renderActions(); renderCoach(); }
 
 function askCoach() {
   if (!myTurn()) return;
-  const b = $('bTip');
-  b.disabled = true;
-  setHTML($('status'), '<b>The coach is thinking…</b> Simulating how this hand could run out.');
+  $('bTip').disabled = true;
+  setHTML($('status'), '<b>The coach is thinking…</b>');
   setTimeout(() => {
     ui.advice = getAdvice(1600);
     selectTab('coach');
     render();
-    if (stacked.matches) {
-      const a = ui.advice;
-      showAlert('tip', 'Coach', `<b>${a.verdict}.</b> ${a.summary} <a href="#coach" class="seewhy">See why ↓</a>`);
-    }
+    if (stacked.matches) showToast('tip', ui.advice.verdict, `${ui.advice.summary} <a href="#coach" class="seewhy">Why?</a>`);
   }, 30);
 }
 
 /* ---------- coach panel ---------- */
 function renderCoach() {
-  const pane = $('paneCoach');
   const a = ui.advice;
-  if (!a || a.hand !== G.handNo) { setHTML(pane, idleHTML()); return; }
-  setHTML(pane, tipHTML(a, a.decisionId === G.decisionId && !G.over));
+  if (!a || a.hand !== G.handNo) setHTML($('paneCoach'), idleHTML());
+  else setHTML($('paneCoach'), tipHTML(a, a.decisionId === G.decisionId && !G.over));
+}
+function profileHTML() {
+  if (HS.hands < 4) return '';
+  const vp = HS.vpip / HS.hands, pr = HS.pfr / HS.hands;
+  const style = `${vp < .2 ? 'Tight' : vp < .33 ? 'Solid' : 'Loose'}, ${pr / Math.max(vp, .01) >= .55 ? 'aggressive' : 'passive'}`;
+  const agree = G.stats.decisions ? `${G.stats.agreed}/${G.stats.decisions}` : '—';
+  return `<div><p class="eyebrow">How the bots see you</p>
+    <div class="profile">
+      <div class="mini"><div class="k">Play</div><div class="v">${pctTxt(vp)}</div></div>
+      <div class="mini"><div class="k">Raise</div><div class="v">${pctTxt(pr)}</div></div>
+      <div class="mini"><div class="k">Coach match</div><div class="v">${agree}</div></div>
+    </div>
+    <p class="note">They read you as <b>${style.toLowerCase()}</b> and adjust to it. The Shark adjusts the most.</p></div>`;
 }
 function idleHTML() {
   const my = myTurn();
   return `<div class="stack">
     <div>
-      <p class="eyebrow">${my ? 'Your turn' : G.over ? 'Between hands' : 'Watching the action'}</p>
-      <h2 class="h2">${my ? 'Not sure? Ask the coach.' : 'Meet the table'}</h2>
-      <p class="muted">${my ? 'Press <b>Ask the coach</b> (or T) for a recommendation based on your cards, the board, the pot odds and how each bot has played this hand.'
-                            : 'Every bot has a style. Spotting a style and adjusting to it is most of what makes a winning player.'}</p>
+      <p class="eyebrow">${my ? 'Your turn' : G.over ? 'Between hands' : 'Watching'}</p>
+      <h2 class="h2">${my ? 'Stuck? Ask the coach.' : 'Who you’re up against'}</h2>
+      <p class="muted">${my ? 'You’ll get a recommendation based on your cards, the pot odds and how each bot has played this hand.' : 'Each bot has its own style. Spotting it and adjusting is most of winning poker.'}</p>
     </div>
-    <ul class="roster">${Object.values(PERSONAS).map(P => `<li><div class="sigil" style="--c:${P.color}">${P.sigil}</div><div><b>${P.name}</b><span class="tagline">${P.tag}</span><p>${P.blurb} <em>${P.beat}</em></p></div></li>`).join('')}</ul>
+    <ul class="roster">${Object.values(PERSONAS).map(P => `<li><div class="avatar" style="--c:${P.color}" aria-hidden="true">${P.sigil}</div><div><b>${P.name}</b><span class="t">${P.tag}</span><p>${P.beat}</p></div></li>`).join('')}</ul>
+    ${profileHTML()}
   </div>`;
 }
 function tipHTML(a, fresh) {
   const eq = a.equity, need = a.need;
-  const meter = eq != null ? `<div class="meter"><p class="eyebrow">How often you win vs. what you need</p>
+  const meter = eq != null ? `<div>
       <div class="meter-bar"><div class="meter-fill" style="width:${(eq * 100).toFixed(1)}%"></div>${need != null ? `<div class="meter-need" style="left:calc(${(need * 100).toFixed(1)}% - 1px)"></div>` : ''}</div>
-      <div class="meter-legend"><span>Equity <b>${pctTxt(eq)}</b></span>${need != null ? `<span>Needed to call <b>${pctTxt(need)}</b></span>` : '<span>No bet to call</span>'}</div></div>` : '';
+      <div class="meter-legend"><span>You win <b>${pctTxt(eq)}</b></span>${need != null ? `<span>Needed to call <b>${pctTxt(need)}</b></span>` : '<span>No bet to call</span>'}</div>
+    </div>` : '';
   const L = LESSONS[a.concept];
+  const main = a.reasons.slice(0, 3), extra = a.reasons.slice(3);
   return `<div class="tip stack${fresh ? '' : ' stale'}">
-    ${fresh ? '' : `<p class="stale-note">${G.over ? 'This hand is over. Deal the next one to keep practising.' : 'The action has moved on. Ask again for a fresh read.'}</p>`}
-    <div><p class="eyebrow">Coach says · ${STREETS[a.street]}</p><p class="verdict ${a.tone}">${a.verdict}</p><p class="summary">${a.summary}</p></div>
+    ${fresh ? '' : `<p class="stale-note">${G.over ? 'This hand is over.' : 'The action has moved on. Ask again for a fresh read.'}</p>`}
+    <div><p class="eyebrow">Coach · ${STREETS[a.street]}</p><p class="verdict ${a.tone}">${a.verdict}</p><p class="summary">${a.summary}</p></div>
     ${meter}
-    <div class="statgrid">${a.stats.map(s => `<div class="stat"><div class="k">${s.k}</div><div class="v${s.num ? ' num' : ''}">${s.v}${s.sub ? ` <small>${s.sub}</small>` : ''}</div></div>`).join('')}</div>
-    <div><p class="eyebrow">Why</p><ul class="reasons">${a.reasons.map(r => `<li>${r}</li>`).join('')}</ul></div>
-    ${a.reads.length ? `<div><p class="eyebrow">Reading the table</p><div class="reads">${a.reads.map(r => `<div class="read"><div class="sigil" style="--c:${r.P.color}">${r.P.sigil}</div><div><b>${r.P.name}</b>${r.width < 1 ? `<span class="w">${pctTop(r.width)}</span>` : ''}<p>${r.line}</p></div></div>`).join('')}</div></div>` : ''}
-    ${L ? `<div class="lesson"><p class="eyebrow">Lesson</p><h3>${L[0]}</h3><p>${L[1]}</p></div>` : ''}
+    <div class="minis">${a.stats.map(s => `<div class="mini"><div class="k">${s.k}</div><div class="v">${s.v}${s.sub ? `<small>${s.sub}</small>` : ''}</div></div>`).join('')}</div>
+    <div><p class="eyebrow">Why</p><ul class="why">${main.map(r => `<li>${r}</li>`).join('')}</ul></div>
+    ${L ? `<div class="lesson"><h3>${L[0]}</h3><p>${L[1]}</p></div>` : ''}
+    ${extra.length ? `<details class="fold-out"><summary>More detail</summary><div><ul class="why">${extra.map(r => `<li>${r}</li>`).join('')}</ul></div></details>` : ''}
+    ${a.reads.length ? `<details class="fold-out"><summary>Opponent reads (${a.reads.length})</summary><div class="reads">${a.reads.map(r => `<div class="read"><div class="avatar" style="--c:${r.P.color}" aria-hidden="true">${r.P.sigil}</div><div><b>${r.P.name}</b>${r.width < 1 ? `<span class="w">${pctTop(r.width)}</span>` : ''}<p>${r.line}</p></div></div>`).join('')}</div></details>` : ''}
   </div>`;
 }
 
@@ -246,27 +253,26 @@ function renderChart() {
   for (let r = 0; r < 13; r++) for (let c = 0; c < 13; c++) {
     const rr = 12 - r, cr = 12 - c;
     const key = r === c ? RANKS[rr] + RANKS[rr] : c > r ? RANKS[rr] + RANKS[cr] + 's' : RANKS[cr] + RANKS[rr] + 'o';
-    const pct = PRE[key].pct, inR = pct <= w;
-    cells += `<div class="${inR ? 'in' : ''}${key === mine ? ' me' : ''}" style="--a:${(1 - .5 * pct / w).toFixed(2)}" title="${key}: top ${Math.max(1, Math.round(pct * 100))}%">${key}</div>`;
+    const pct = PRE[key].pct;
+    cells += `<div class="${pct <= w ? 'in' : ''}${key === mine ? ' me' : ''}" style="--a:${(1 - .45 * pct / w).toFixed(2)}" title="${key}: top ${Math.max(1, Math.round(pct * 100))}%">${key}</div>`;
   }
-  const mineTxt = mine ? ` Your ${mine} is in the ${pctTop(PRE[mine].pct)}, <b>${PRE[mine].pct <= w ? 'inside' : 'outside'}</b> this range.` : '';
-  setHTML($('paneChart'), `<div class="stack"><div>
+  const mineTxt = mine ? ` Your ${mine} is in the ${pctTop(PRE[mine].pct)}, so it's <b>${PRE[mine].pct <= w ? 'a raise' : 'a fold'}</b> from here.` : '';
+  setHTML($('paneChart'), `<div>
       <p class="eyebrow">Opening ranges</p>
       <h2 class="h2">Which hands to raise first in</h2>
-      <p class="muted">When nobody has raised yet, open-raise the highlighted hands and fold the rest. The later your position, the more hands you can play.</p>
+      <p class="muted">When nobody has raised yet, raise the highlighted hands and fold the rest. Later seats can play more hands.</p>
       <div class="chart-pos" role="group" aria-label="Position">${['UTG', 'CO', 'BTN', 'SB'].map(p => `<button type="button" data-pos="${p}" aria-pressed="${p === pos}">${p}${p === heroPos ? ' · you' : ''}</button>`).join('')}</div>
       <div class="grid13" role="img" aria-label="Starting hand chart for ${POS_LONG[pos]}">${cells}</div>
-      <div class="chart-key"><span><i style="background:var(--brass)"></i>Raise from ${pos}</span><span><i style="background:var(--panel-2)"></i>Fold</span><span>Suited above the diagonal, offsuit below</span></div>
-    </div>
-    <p class="muted">From ${POS_LONG[pos]}, open about the <b>${pctTop(w)}</b> of hands.${mineTxt} Facing a raise, play much tighter than this.</p></div>`);
+      <div class="chart-key"><span><i style="background:var(--accent)"></i>Raise</span><span><i style="background:var(--surface-2)"></i>Fold</span><span>Suited above the diagonal</span></div>
+      <p class="note">From ${POS_LONG[pos]}, open about the <b>${pctTop(w)}</b> of hands.${mineTxt}</p>
+    </div>`);
 }
 
 /* ---------- history ---------- */
 function renderLog() {
-  const items = G.log.slice(-160).map(e => `<li class="${e.kind}">${e.kind === 'hand' ? e.text : e.text}</li>`).join('');
-  const el = $('log'); const p = $('paneLog');
+  const p = $('paneLog');
   const atBottom = p.scrollTop + p.clientHeight >= p.scrollHeight - 30;
-  setHTML(el, items);
+  setHTML($('log'), G.log.slice(-160).map(e => `<li class="${e.kind}">${e.text}</li>`).join(''));
   if (atBottom) p.scrollTop = p.scrollHeight;
 }
 
@@ -281,36 +287,47 @@ function selectTab(name) {
 }
 
 /* ---------- wiring ---------- */
+function toggleMenu(open) {
+  const m = $('menu'), b = $('bMenu');
+  open = open ?? m.hidden;
+  m.hidden = !open; b.setAttribute('aria-expanded', String(open));
+}
 function bind() {
   $('bFold').onclick = () => humanAct('fold');
   $('bCall').onclick = () => humanAct(G.currentBet - G.players[0].bet > 0 ? 'call' : 'check');
   $('bRaise').onclick = () => humanAct('raise');
   $('bTip').onclick = askCoach;
-  $('bNext').onclick = () => { $('alert').hidden = true; ui.advice = null; startHand(); };
+  $('bNext').onclick = () => { $('toast').hidden = true; ui.advice = null; startHand(); };
   $('rAmt').oninput = e => setAmount(+e.target.value);
-  $('nAmt').onchange = e => setAmount(+e.target.value || 0);
-  $('presets').onclick = e => { const b = e.target.closest('.preset'); if (b && !b.disabled) setAmount(+b.dataset.v); };
+  $('presets').onclick = e => { const b = e.target.closest('button'); if (b && !b.disabled) setAmount(+b.dataset.v); };
   $('tCoach').onclick = () => selectTab('coach');
   $('tChart').onclick = () => selectTab('chart');
   $('tLog').onclick = () => selectTab('log');
   $('paneChart').onclick = e => { const b = e.target.closest('[data-pos]'); if (b) { ui.chartPos = b.dataset.pos; renderChart(); } };
-  $('alert').onclick = e => { if (e.target.closest('.seewhy')) { e.preventDefault(); selectTab('coach'); $('coach').scrollIntoView({ behavior: 'smooth', block: 'start' }); } };
+  $('toast').onclick = e => {
+    if (e.target.closest('.x')) $('toast').hidden = true;
+    if (e.target.closest('.seewhy')) { e.preventDefault(); selectTab('coach'); $('coach').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  };
+  $('bMenu').onclick = e => { e.stopPropagation(); toggleMenu(); };
+  document.addEventListener('click', e => { if (!$('menu').hidden && !e.target.closest('#menu')) toggleMenu(false); });
   const store = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
   const read = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   if (read('pc-fast') === '1') $('optFast').checked = true;
   if (read('pc-alerts') === '0') $('optAlerts').checked = false;
   G.fast = $('optFast').checked;
   $('optFast').onchange = e => { G.fast = e.target.checked; store('pc-fast', e.target.checked ? '1' : '0'); };
-  $('optAlerts').onchange = e => { store('pc-alerts', e.target.checked ? '1' : '0'); if (!e.target.checked) $('alert').hidden = true; };
+  $('optAlerts').onchange = e => { store('pc-alerts', e.target.checked ? '1' : '0'); if (!e.target.checked) $('toast').hidden = true; };
   narrow.addEventListener('change', placeChips);
   document.addEventListener('keydown', e => {
-    if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    if (e.key === 'Escape') { toggleMenu(false); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && e.target.type !== 'range' && e.target.type !== 'checkbox') return;
     const k = e.key.toLowerCase();
-    if (k === 'f' && !$('bFold').disabled) $('bFold').click();
-    else if (k === 'c' && !$('bCall').disabled) $('bCall').click();
-    else if (k === 'r' && !$('bRaise').disabled) $('bRaise').click();
-    else if (k === 't' && !$('bTip').disabled) $('bTip').click();
-    else if (k === 'n' && !$('bNext').hidden) $('bNext').click();
+    const press = id => { const b = $(id); if (!b.disabled && !b.hidden && !b.closest('[hidden]')) b.click(); };
+    if (k === 'f') press('bFold');
+    else if (k === 'c') press('bCall');
+    else if (k === 'r') press('bRaise');
+    else if (k === 't') press('bTip');
+    else if (k === 'n') press('bNext');
   });
 }
 

@@ -1,49 +1,57 @@
 <div class="app">
   <header class="top">
-    <div class="brand">
-      <h1>Pocket <em>Coach</em></h1>
-      <p>No-limit Hold'em against four bots, each with a different style. Play your hands and ask the coach whenever you're not sure what to do.</p>
+    <h1 class="logo"><span class="mark" aria-hidden="true">&#x2660;&#xFE0E;</span>Pocket Coach</h1>
+    <div class="top-right">
+      <div class="kpi hide-sm"><span>Hand</span><b id="kHand">—</b></div>
+      <div class="kpi"><span>Stack</span><b id="kStack">2,000</b></div>
+      <div class="kpi"><span>Net</span><b id="kNet">0</b></div>
+      <button class="icon-btn" id="bMenu" type="button" aria-label="Settings" aria-expanded="false" aria-controls="menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+      </button>
+      <div class="menu" id="menu" hidden>
+        <label class="switch">Review my decisions as I play <input type="checkbox" id="optAlerts" checked></label>
+        <label class="switch">Fast bots <input type="checkbox" id="optFast"></label>
+        <div class="keys" aria-label="Keyboard shortcuts">
+          <kbd>F</kbd><span>Fold</span>
+          <kbd>C</kbd><span>Check or call</span>
+          <kbd>R</kbd><span>Bet or raise</span>
+          <kbd>T</kbd><span>Ask the coach</span>
+          <kbd>N</kbd><span>Next hand</span>
+        </div>
+      </div>
     </div>
-    <dl class="kpis">
-      <div><dt>Hand</dt><dd id="kHand">—</dd></div>
-      <div><dt>Your stack</dt><dd id="kStack">2,000</dd></div>
-      <div><dt>Net</dt><dd id="kNet">0</dd></div>
-      <div><dt>Coach agreement</dt><dd id="kAgree">—</dd></div>
-    </dl>
   </header>
 
   <main class="play">
     <div class="table" id="table">
-      <div class="felt"><div class="felt-print">No-Limit Hold'em · Blinds 10 / 20</div></div>
+      <div class="felt"></div>
       <div class="center">
-        <div class="street" id="street">Preflop</div>
+        <div class="pot empty" id="pot"></div>
         <div class="board" id="board"></div>
-        <div class="pot" id="pot"></div>
         <div class="banner" id="banner" hidden></div>
       </div>
     </div>
 
-    <div class="alert" id="alert" hidden></div>
+    <div class="toast" id="toast" hidden></div>
 
-    <section class="actions" id="actions" aria-label="Your actions">
-      <div class="act-top">
-        <div class="status" id="status">Shuffling up…</div>
-        <button class="btn coachb" id="bTip" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1.1 2V16h5v-.2c.1-.8.5-1.5 1.1-2A6 6 0 0 0 12 3z"/></svg>
-          Ask the coach<kbd>T</kbd>
+    <section class="dock" aria-label="Your actions">
+      <div class="dock-head">
+        <div class="status" id="status" aria-live="polite">Shuffling up…</div>
+        <button class="coach-btn" id="bTip" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1.1 2V16h5v-.2c.1-.8.5-1.5 1.1-2A6 6 0 0 0 12 3z"/></svg>
+          Ask the coach
         </button>
       </div>
       <div class="sizer" id="sizer">
-        <div class="presets" id="presets"></div>
+        <div class="seg" id="presets" role="group" aria-label="Bet size presets"></div>
         <input type="range" id="rAmt" min="0" max="100" step="5" value="0" aria-label="Bet size">
-        <input type="number" id="nAmt" min="0" step="5" value="0" aria-label="Bet size in chips">
       </div>
-      <div class="act-btns" id="actBtns">
-        <button class="btn fold" id="bFold" type="button">Fold<kbd>F</kbd></button>
-        <button class="btn call" id="bCall" type="button">Check<kbd>C</kbd></button>
-        <button class="btn raise" id="bRaise" type="button">Raise<kbd>R</kbd></button>
+      <div class="btns" id="actBtns">
+        <button class="btn fold" id="bFold" type="button">Fold</button>
+        <button class="btn call" id="bCall" type="button">Check</button>
+        <button class="btn raise" id="bRaise" type="button">Raise</button>
       </div>
-      <button class="btn raise" id="bNext" type="button" hidden>Deal next hand<kbd>N</kbd></button>
+      <button class="btn next" id="bNext" type="button" hidden>Next hand</button>
     </section>
   </main>
 
@@ -56,9 +64,5 @@
     <div class="pane" id="paneCoach" role="tabpanel"></div>
     <div class="pane" id="paneChart" role="tabpanel" hidden></div>
     <div class="pane" id="paneLog" role="tabpanel" hidden><ol class="log" id="log"></ol></div>
-    <footer class="coach-foot">
-      <label><input type="checkbox" id="optAlerts" checked> Review my decisions as I play</label>
-      <label><input type="checkbox" id="optFast"> Fast bots</label>
-    </footer>
   </aside>
 </div>

@@ -14,10 +14,17 @@ Keyboard: **F** fold · **C** check/call · **R** bet/raise · **T** ask the coa
 
 | Bot | Style | How to beat it |
 | --- | --- | --- |
-| The Rock | Tight, passive | Steal their blinds; fold when they suddenly bet big |
-| The Maniac | Loose, aggressive | Call down lighter with good hands; let them bluff into you |
-| The Station | Loose, passive | Never bluff; bet your good hands big |
-| The Shark | Tight, aggressive | Respect their re-raises; avoid big pots without a big hand |
+| The Rock | Tight, patient | Steal their blinds; respect their big bets |
+| The Maniac | Loose, aggressive | Call down wider with strong hands; bluff them less |
+| The Station | Loose, sticky | Bet your good hands for value; rarely bluff |
+| The Shark | Balanced, adaptive | Mix up your play; don't repeat the same mistake |
+
+The bots aren't pushovers. Each one:
+
+- works out its odds against the hands your actions suggest, not against random cards;
+- keeps track of how you play (how many hands you play and raise, how often you fold to continuation bets, how often you bluff the river) and adjusts. The Shark adjusts the most;
+- uses the same bet sizes for bluffs and strong hands, so the size alone won't tell you which it has;
+- opens by position, re-raises with its best hands plus some bluffs, and avoids risking a big stack without a strong hand.
 
 ## What the coach does
 

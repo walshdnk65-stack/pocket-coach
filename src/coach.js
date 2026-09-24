@@ -35,22 +35,17 @@ const LESSONS = {
 };
 
 /* ---------- Reading opponents ---------- */
+// Each bot action records the range it represents (w) and how often it's taken without a real hand (loose).
 function estimateRange(p) {
-  const P = PERSONAS[p.persona];
-  const pre = p.actions.filter(a => a.street === 0);
-  const lvl = Math.max(0, ...pre.filter(a => a.type === 'raise').map(a => a.level));
-  let width = 1;
-  if (lvl >= 2) width = P.threeBet;
-  else if (lvl === 1) width = P.pfr;
-  else if (pre.some(a => a.type === 'call' && a.to > BB)) width = Math.min(1, P.vpip * .55 + (P.sticky > .1 ? .08 : 0));
-  else if (pre.some(a => a.type === 'call')) width = P.vpip;
+  const pre = p.actions.filter(a => a.street === 0 && a.w != null);
+  const width = pre.length ? Math.min(1, pre[pre.length - 1].w) : 1;
   const post = p.actions.filter(a => a.street > 0);
-  const aggr = post.some(a => a.type === 'raise');
-  const called = post.some(a => a.type === 'call');
+  const aggrActs = post.filter(a => a.type === 'raise');
+  const callActs = post.filter(a => a.type === 'call');
   let cond = false, loose = 1;
-  if (aggr) { cond = true; loose = P.bluff; }
-  else if (called) { cond = true; loose = P.float; }
-  return { width, cond, loose, aggr, called };
+  if (aggrActs.length) { cond = true; loose = aggrActs[aggrActs.length - 1].loose ?? .25; }
+  else if (callActs.length) { cond = true; loose = callActs[callActs.length - 1].loose ?? .3; }
+  return { width, cond, loose, aggr: aggrActs.length > 0, called: callActs.length > 0 };
 }
 const rangeOpt = p => { const r = estimateRange(p); return { width: r.width, cond: r.cond, loose: r.loose }; };
 
@@ -182,14 +177,14 @@ function preflopAdvice(hero, toCall, pot, potOdds, opps, iters) {
     }
   } else {
     const raiser = G.players[G.lastAggressor];
-    const R = estimateRange(raiser), P = PERSONAS[raiser.persona], w = R.width;
+    const R = estimateRange(raiser), w = R.width;
     const n = G.raiseCount;
     const eff = Math.min(hero.stack + hero.bet, raiser.stack + raiser.bet);
     const valueW = n >= 2 ? Math.min(.03, w * .45) : Math.max(.03, Math.min(.09, w * .4));
     let callW = w * (pos === 'BB' ? 1.5 : (pos === 'BTN' || pos === 'CO') ? 1.1 : .8);
     if (n >= 2) callW = w * .6;
     const weakAce = !pair && hi >= 11 && lo < 8 && !suited;
-    reasons.push(`${raiser.name} ${n >= 2 ? 're-raised' : 'raised'} to ${fmt(G.currentBet)}. For a ${P.tag.toLowerCase()} player that is roughly the ${pctTop(w)}: ${rangeWords(w)}.`);
+    reasons.push(`${raiser.name} ${n >= 2 ? 're-raised' : 'raised'} to ${fmt(G.currentBet)}. The way they play, that's roughly the ${pctTop(w)}: ${rangeWords(w)}.`);
     if (eq !== null) reasons.push(`Against those hands you win about ${pctTxt(eq)} of the time. Calling ${fmt(toCall)} needs ${pctTxt(potOdds)}.`);
     if (pct <= valueW) {
       action = 'raise';
@@ -211,14 +206,13 @@ function preflopAdvice(hero, toCall, pot, potOdds, opps, iters) {
       if (weakAce) reasons.push(`${cls} is often dominated: a raiser holds a better ace or king much more often than a worse one.`);
     }
     if (action === 'call') reasons.push(pos === 'BTN' || pos === 'CO' ? "You'll have position after the flop, which makes calling easier." : pos === 'BB' ? 'You already have 20 in the pot, so the price is lower.' : "You'll be out of position after the flop, which makes close calls worse.");
-    if (raiser.persona === 'maniac') reasons.push('The Maniac raises with lots of weak hands, so you can play back at them wider than usual.');
-    if (raiser.persona === 'rock' || raiser.persona === 'station') reasons.push(`${raiser.name} rarely raises. When they do, it's a strong hand, so only continue with a premium hand or a pair to set-mine.`);
+    if (raiser.persona === 'maniac') reasons.push('The Maniac raises light, so you can play back at them wider than usual.');
+    if (raiser.persona === 'rock') reasons.push("The Rock only raises good hands. Continue with a premium hand or a pair to set-mine, and fold the rest.");
   }
   const stats = [
-    { k: 'Your hand', v: cls, sub: pctTop(pct) },
+    { k: 'Hand', v: cls, sub: pctTop(pct) },
     { k: 'Position', v: pos },
-    { k: toCall ? 'To call' : 'Pot', v: fmt(toCall || pot), num: true },
-    { k: eq !== null ? 'Equity' : 'Open range', v: eq !== null ? pctTxt(eq) : pctTop(openW), num: true },
+    eq !== null ? { k: 'Equity', v: pctTxt(eq) } : { k: 'Open here', v: pctTop(openW) },
   ];
   return { action, amount, concept, summary, reasons, stats, equity: eq, need: toCall > 0 ? potOdds : null, close, handLabel: cls };
 }
@@ -271,6 +265,8 @@ function postflopAdvice(hero, toCall, pot, potOdds, opps, iters) {
   } else {
     const bettor = G.players[G.lastAggressor];
     const BP = bettor && !bettor.human ? PERSONAS[bettor.persona] : null;
+    const lastAgg = bettor ? [...bettor.actions].reverse().find(a => a.type === 'raise') : null;
+    const bluffy = (lastAgg && lastAgg.loose != null ? lastAgg.loose : .2) >= .2;
     const impl = outs >= 4 && toCome > 0 ? (opps.some(p => p.persona === 'station' || p.persona === 'maniac') ? .06 : .03) : 0;
     if (eq >= .72 && G.raiseCount < 3) {
       if (!multi && BP && bettor.persona === 'maniac' && street < 3) {
@@ -288,7 +284,7 @@ function postflopAdvice(hero, toCall, pot, potOdds, opps, iters) {
                          : `Call. You win about ${pctTxt(eq)} of the time and only need ${pctTxt(potOdds)}.`;
     } else if (eq + impl >= potOdds - .04) {
       close = true;
-      if (BP && BP.bluff >= .2) { action = 'call'; concept = 'readRange'; summary = `A close call, and the coach leans call. ${bettor.name} bluffs often enough that folding here gives up too much.`; }
+      if (BP && bluffy) { action = 'call'; concept = 'readRange'; summary = `A close call, and the coach leans call. ${bettor.name} bluffs often enough that folding here gives up too much.`; }
       else { action = 'fold'; concept = 'potOdds'; summary = `A close call, but fold. ${bettor ? bettor.name + ' rarely bluffs' : 'Their bet is usually real'}, so your real equity is probably lower than it looks.`; }
     } else {
       action = 'fold'; concept = outs > 0 ? 'rule42' : 'potOdds';
@@ -298,22 +294,21 @@ function postflopAdvice(hero, toCall, pot, potOdds, opps, iters) {
 
   const reasons = [];
   reasons.push(`You have ${made.label.charAt(0).toLowerCase() + made.label.slice(1)}${drawTxt ? `, plus ${drawTxt}` : ''}.`);
-  reasons.push(tex.wet ? `The board is ${tex.desc || 'coordinated'}: lots of draws are possible, so strong hands should bet to charge them.`
-                       : `The board is ${tex.desc ? tex.desc + ' and ' : ''}fairly dry: few draws, so hands rarely change much on later cards.`);
+  if (toCall > 0) reasons.push(`Pot odds: call ${fmt(toCall)} to win ${fmt(pot + toCall)}, so you need ${pctTxt(potOdds)} equity. Against their likely hands you have about ${pctTxt(eq)}.`);
+  else reasons.push(`Against their likely hands you win about ${pctTxt(eq)} of the time${multi ? ` (${opps.length} opponents, so a fair share would be ${pctTxt(1 / (opps.length + 1))})` : ''}.`);
   if (outs > 0 && toCome > 0) {
     const m = toCome === 2 ? 4 : 2;
     reasons.push(`${outs} outs to a straight or better. Rule of ${m}: ${outs} × ${m} ≈ ${outs * m}% to hit (exactly ${pctTxt(hit)}).`);
   }
+  reasons.push(tex.wet ? `The board is ${tex.desc || 'coordinated'}: lots of draws are possible, so strong hands should bet to charge them.`
+                       : `The board is ${tex.desc ? tex.desc + ' and ' : ''}fairly dry: few draws, so hands rarely change much on later cards.`);
   if (pairOuts > 0 && toCome > 0) reasons.push(`${pairOuts} more cards would pair one of your overcards. Count those as weaker outs, because one pair may not be enough.`);
-  if (toCall > 0) reasons.push(`Pot odds: call ${fmt(toCall)} to win ${fmt(pot + toCall)}, so you need ${pctTxt(potOdds)} equity. Against their likely hands you have about ${pctTxt(eq)}.`);
-  else reasons.push(`Against their likely hands you win about ${pctTxt(eq)} of the time${multi ? ` (${opps.length} opponents, so a fair share would be ${pctTxt(1 / (opps.length + 1))})` : ''}.`);
   reasons.push(heroInPosition() ? "You're in position: you act last, so you get to see what they do first." : "You're out of position: you act before them, so you give away information every street.");
 
   const stats = [
-    { k: 'Your hand', v: made.label },
-    { k: 'Equity', v: pctTxt(eq), num: true },
-    { k: toCall ? 'Need' : 'Pot', v: toCall ? pctTxt(potOdds) : fmt(pot), num: true },
-    { k: 'Outs', v: toCome ? String(outs) : 'River', num: true },
+    { k: 'Equity', v: pctTxt(eq) },
+    toCall ? { k: 'Need', v: pctTxt(potOdds) } : { k: 'Pot', v: fmt(pot) },
+    { k: 'Outs', v: toCome ? String(outs) : '—' },
   ];
   return { action, amount, concept, summary, reasons, stats, equity: eq, need: toCall > 0 ? potOdds : null, close, handLabel: made.label };
 }
