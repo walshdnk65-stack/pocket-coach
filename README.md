@@ -4,7 +4,9 @@ A no-limit Texas Hold'em trainer that runs in the browser. You play against four
 
 ## Play
 
-Open `index.html` in any modern browser. It's a single file with no server or install needed. It loads its fonts from Google Fonts and falls back to system fonts when offline.
+**▶ [Play Pocket Coach](https://walshdnk65-stack.github.io/pocket-coach/)**
+
+Or download `index.html` and open it in any modern browser. It's a single file with no server or install needed. It loads its fonts from Google Fonts and falls back to system fonts when offline.
 
 Keyboard: **F** fold · **C** check/call · **R** bet/raise · **T** ask the coach · **N** next hand.
 
