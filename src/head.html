@@ -27,7 +27,7 @@ button{font:inherit;color:inherit}
 .app{max-width:1320px;margin:0 auto;padding-inline:16px;padding-block:16px 36px;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px 24px;align-items:start}
 
 /* ---------- header ---------- */
-.top{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;position:relative}
+.top{grid-column:1/-1;display:flex;flex-wrap:wrap;row-gap:10px;align-items:center;justify-content:space-between;gap:12px;position:relative}
 .logo{display:flex;align-items:center;gap:10px;margin:0;white-space:nowrap;font:600 19px var(--display);letter-spacing:-.015em}
 .logo .mark{width:32px;height:32px;border-radius:10px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font:18px var(--suit)}
 .top-right{display:flex;align-items:center;gap:8px}
@@ -168,12 +168,38 @@ kbd{font:600 11px var(--font);background:var(--surface-3);border-radius:6px;padd
 .verdict{font:700 30px/1.1 var(--display);letter-spacing:-.025em;margin:0}
 .verdict.go{color:var(--good)} .verdict.caution{color:var(--warn)} .verdict.stop{color:var(--bad)}
 .summary{margin:8px 0 0;font-size:15px;text-wrap:pretty}
-.meter-bar{position:relative;height:8px;border-radius:999px;background:var(--surface-3)}
-.meter-fill{position:absolute;left:0;top:0;bottom:0;border-radius:999px;background:linear-gradient(90deg,#b98522,var(--accent))}
-.meter-need{position:absolute;top:-5px;bottom:-5px;width:2px;border-radius:1px;background:var(--text)}
-.meter-legend{display:flex;justify-content:space-between;gap:10px;margin-top:8px;font-size:13px;color:var(--text-2)}
-.meter-legend b{color:var(--text);font:600 13px var(--display)}
-.minis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.odds,.strength{display:grid;gap:12px;background:var(--surface-2);border-radius:14px;padding:13px 14px}
+.odds .eyebrow{margin:0}
+.odds-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13.5px;color:var(--text-2)}
+.odds-top em{font-style:normal;color:var(--text-3);font-size:12px}
+.odds-top > b{font:600 16px var(--display);color:var(--text);white-space:nowrap}
+.odds-top > b small{font:600 11.5px var(--font);color:var(--text-3);margin-left:6px}
+.dots10{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:5px;margin-top:7px}
+.dots10 i{justify-self:center;width:100%;max-width:20px;aspect-ratio:1;border-radius:50%;background:linear-gradient(90deg,var(--c) var(--f),var(--surface-3) var(--f))}
+.dots10.win{--c:var(--good)} .dots10.need{--c:var(--text-2)}
+.odds-say{margin:0;font-size:13.5px;color:var(--text-2);text-wrap:pretty}
+.odds-say.good{color:var(--good)} .odds-say.bad{color:var(--bad)} .odds-say.close{color:var(--warn)}
+.hand-cls{font:600 14px var(--display);color:var(--text)}
+.tiers{position:relative;display:grid;grid-template-columns:repeat(5,1fr);gap:3px;height:10px}
+.tiers span{border-radius:3px}
+.tiers .t0,.tier.t0{--t:#f87171} .tiers .t1,.tier.t1{--t:#fb923c} .tiers .t2,.tier.t2{--t:#f5b942} .tiers .t3,.tier.t3{--t:#8fd9a8} .tiers .t4,.tier.t4{--t:#3ecf8e}
+.tiers span{background:color-mix(in srgb,var(--t) 65%,transparent)}
+.tier{font:700 15px var(--display);color:var(--t)}
+.tiers .you{position:absolute;top:-3px;width:16px;height:16px;border-radius:50%;background:#fff;translate:-50% 0;box-shadow:0 0 0 3px var(--surface-2)}
+.tiers .cut{position:absolute;top:-7px;bottom:-7px;width:2px;border-radius:1px;background:rgba(255,255,255,.75);translate:-50% 0}
+.tier-labels{display:grid;grid-template-columns:repeat(5,1fr);font-size:10.5px;color:var(--text-3);text-align:center;margin-top:-4px}
+.gloss{margin:0}
+.gloss dt{font-weight:700;font-size:13.5px;margin-top:12px}
+.gloss dt:first-child{margin-top:0}
+.gloss dd{margin:2px 0 0;font-size:13px;color:var(--text-2);text-wrap:pretty}
+.recap{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.recap li{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:start}
+.recap .mk{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font:800 12px var(--font)}
+.recap .good .mk{background:rgba(62,207,142,.16);color:var(--good)}
+.recap .ok .mk{background:rgba(251,146,60,.16);color:var(--warn)}
+.recap .leak .mk{background:rgba(248,113,113,.16);color:var(--bad)}
+.recap b{font-size:13.5px;font-weight:700}
+.recap p{margin:2px 0 0;font-size:13px;color:var(--text-2);text-wrap:pretty}
 .why{list-style:none;margin:0;padding:0;display:grid;gap:9px}
 .why li{position:relative;padding-left:16px;font-size:14px;color:var(--text-2);text-wrap:pretty}
 .why li::before{content:'';position:absolute;left:2px;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--accent)}

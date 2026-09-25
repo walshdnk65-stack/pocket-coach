@@ -1,7 +1,7 @@
 /* ================= Rendering & input ================= */
 const $ = id => document.getElementById(id);
 const els = { seats: [], bets: [] };
-const ui = { advice: null, amount: 0, tab: 'coach', chartPos: null };
+const ui = { advice: null, amount: 0, tab: 'coach', chartPos: null, review: [] };
 const narrow = window.matchMedia('(max-width:640px)');
 const stacked = window.matchMedia('(max-width:1060px)');
 
@@ -152,16 +152,19 @@ function humanAct(type) {
   if (!myTurn()) return;
   let adv = ui.advice && ui.advice.decisionId === G.decisionId ? ui.advice : null;
   if (!adv) { try { adv = getAdvice(900); } catch (e) { adv = null; } }
+  let j = null;
   if (adv) {
-    const j = judge(adv, type);
+    j = judge(adv, type);
     G.stats.decisions++;
     if (j.level === 'good' || (adv.close && j.level !== 'leak')) G.stats.agreed++;
     if (j.level === 'leak') G.stats.leaks++;
     log(`Coach: ${j.text}`, j.level === 'leak' ? 'leak' : '');
-    if ($('optAlerts').checked) showToast(j.level, { good: 'Good play', ok: 'Worth knowing', leak: 'Leak' }[j.level], j.text);
+    if ($('optAlerts').checked) showToast(j.level, { good: 'Good play', ok: 'Worth knowing', leak: 'Mistake' }[j.level], j.text);
     else $('toast').hidden = true;
   }
+  const street = G.street;
   act(G.players[0], type, type === 'raise' ? ui.amount : 0);
+  if (j) ui.review.push({ hand: G.handNo, street, label: G.players[0].lastAction, level: j.level, text: j.text, concept: adv.concept });
 }
 function showToast(level, title, html) {
   const t = $('toast');
@@ -194,21 +197,26 @@ function askCoach() {
 /* ---------- coach panel ---------- */
 function renderCoach() {
   const a = ui.advice;
-  if (!a || a.hand !== G.handNo) setHTML($('paneCoach'), idleHTML());
-  else setHTML($('paneCoach'), tipHTML(a, a.decisionId === G.decisionId && !G.over));
+  if (G.over && G.handNo) setHTML($('paneCoach'), recapHTML());
+  else if (!a || a.hand !== G.handNo) setHTML($('paneCoach'), idleHTML());
+  else setHTML($('paneCoach'), tipHTML(a, a.decisionId === G.decisionId));
 }
 function profileHTML() {
   if (HS.hands < 4) return '';
   const vp = HS.vpip / HS.hands, pr = HS.pfr / HS.hands;
-  const style = `${vp < .2 ? 'Tight' : vp < .33 ? 'Solid' : 'Loose'}, ${pr / Math.max(vp, .01) >= .55 ? 'aggressive' : 'passive'}`;
-  const agree = G.stats.decisions ? `${G.stats.agreed}/${G.stats.decisions}` : '—';
+  const style = `${vp < .2 ? 'careful' : vp < .33 ? 'solid' : 'loose'} and ${pr / Math.max(vp, .01) >= .55 ? 'aggressive' : 'passive'}`;
+  const tip = vp > .4 ? 'Most beginners play too many hands. Try folding more before the flop.'
+            : vp < .12 ? "You're folding a lot. That's safe, but the bots will start stealing your blinds."
+            : pr / Math.max(vp, .01) < .4 ? 'You call more than you raise. Raising with your good hands usually wins more.'
+            : 'That’s a healthy balance.';
+  const agree = G.stats.decisions ? `${G.stats.agreed} of ${G.stats.decisions}` : '—';
   return `<div><p class="eyebrow">How the bots see you</p>
     <div class="profile">
-      <div class="mini"><div class="k">Play</div><div class="v">${pctTxt(vp)}</div></div>
-      <div class="mini"><div class="k">Raise</div><div class="v">${pctTxt(pr)}</div></div>
-      <div class="mini"><div class="k">Coach match</div><div class="v">${agree}</div></div>
+      <div class="mini"><div class="k">You play</div><div class="v">${vp ? fracShort(vp) : 'none'}<small>hands</small></div></div>
+      <div class="mini"><div class="k">You raise</div><div class="v">${pr ? fracShort(pr) : 'none'}<small>hands</small></div></div>
+      <div class="mini"><div class="k">Coach agreed</div><div class="v">${agree}</div></div>
     </div>
-    <p class="note">They read you as <b>${style.toLowerCase()}</b> and adjust to it. The Shark adjusts the most.</p></div>`;
+    <p class="note">They see you as <b>${style}</b> and adjust to it. ${tip}</p></div>`;
 }
 function idleHTML() {
   const my = myTurn();
@@ -222,23 +230,88 @@ function idleHTML() {
     ${profileHTML()}
   </div>`;
 }
-function tipHTML(a, fresh) {
+// Ten dots, filled in proportion to p: "imagine this spot played 10 times".
+function dotsHTML(p, kind) {
+  let d = '';
+  for (let i = 0; i < 10; i++) d += `<i style="--f:${Math.round(Math.max(0, Math.min(1, p * 10 - i)) * 100)}%"></i>`;
+  return `<div class="dots10 ${kind}" aria-hidden="true">${d}</div>`;
+}
+function oddsRow(label, p, kind, note) {
+  return `<div class="odds-row">
+      <div class="odds-top"><span>${label}${note ? ` <em>${note}</em>` : ''}</span><b>${fracShort(p)}<small>${pctTxt(p)}</small></b></div>
+      ${dotsHTML(p, kind)}
+    </div>`;
+}
+function oddsHTML(a) {
   const eq = a.equity, need = a.need;
-  const meter = eq != null ? `<div>
-      <div class="meter-bar"><div class="meter-fill" style="width:${(eq * 100).toFixed(1)}%"></div>${need != null ? `<div class="meter-need" style="left:calc(${(need * 100).toFixed(1)}% - 1px)"></div>` : ''}</div>
-      <div class="meter-legend"><span>You win <b>${pctTxt(eq)}</b></span>${need != null ? `<span>Needed to call <b>${pctTxt(need)}</b></span>` : '<span>No bet to call</span>'}</div>
-    </div>` : '';
+  if (eq == null) return '';
+  let verdict;
+  if (need == null) verdict = `<p class="odds-say">There's no bet to call, so staying in is free.</p>`;
+  else {
+    const d = eq - need;
+    verdict = d > .03 ? `<p class="odds-say good">You win more often than you need to, so calling makes money over time.</p>`
+            : d < -.03 ? `<p class="odds-say bad">You win less often than you need to, so calling loses money over time.</p>`
+            : `<p class="odds-say close">The two are about the same, so this is a close call.</p>`;
+  }
+  return `<div class="odds">
+      <p class="eyebrow">Imagine this hand played 10 times</p>
+      ${oddsRow('Your chance to win', eq, 'win')}
+      ${need != null ? oddsRow('Needed to call', need, 'need', 'to break even') : ''}
+      ${verdict}
+    </div>`;
+}
+function strengthHTML(a) {
+  if (a.street !== 0 || a.pct == null) return '';
+  const pos = (tierPos(a.pct) * 100).toFixed(1), cut = (tierPos(a.openW) * 100).toFixed(1);
+  const t = tierOf(a.pct);
+  return `<div class="strength">
+      <div class="odds-top"><span>Starting hand: <b class="hand-cls">${a.handLabel}</b></span><b class="tier t${t.i}">${t.name}</b></div>
+      <div class="tiers" aria-hidden="true">${TIERS.map((x, i) => `<span class="t${i}"></span>`).join('')}<i class="you" style="left:${pos}%"></i>${G.raiseCount === 0 ? `<i class="cut" style="left:${cut}%"></i>` : ''}</div>
+      <div class="tier-labels" aria-hidden="true">${TIERS.map(x => `<span>${x.name}</span>`).join('')}</div>
+      <p class="odds-say">${cap(betterThan(a.pct))}.${G.raiseCount === 0 ? ` From your seat, raise with hands to the right of the white line.` : ''}</p>
+    </div>`;
+}
+function tipHTML(a, fresh) {
   const L = LESSONS[a.concept];
   const main = a.reasons.slice(0, 3), extra = a.reasons.slice(3);
   return `<div class="tip stack${fresh ? '' : ' stale'}">
     ${fresh ? '' : `<p class="stale-note">${G.over ? 'This hand is over.' : 'The action has moved on. Ask again for a fresh read.'}</p>`}
     <div><p class="eyebrow">Coach · ${STREETS[a.street]}</p><p class="verdict ${a.tone}">${a.verdict}</p><p class="summary">${a.summary}</p></div>
-    ${meter}
-    <div class="minis">${a.stats.map(s => `<div class="mini"><div class="k">${s.k}</div><div class="v">${s.v}${s.sub ? `<small>${s.sub}</small>` : ''}</div></div>`).join('')}</div>
+    ${strengthHTML(a)}
+    ${oddsHTML(a)}
     <div><p class="eyebrow">Why</p><ul class="why">${main.map(r => `<li>${r}</li>`).join('')}</ul></div>
     ${L ? `<div class="lesson"><h3>${L[0]}</h3><p>${L[1]}</p></div>` : ''}
     ${extra.length ? `<details class="fold-out"><summary>More detail</summary><div><ul class="why">${extra.map(r => `<li>${r}</li>`).join('')}</ul></div></details>` : ''}
-    ${a.reads.length ? `<details class="fold-out"><summary>Opponent reads (${a.reads.length})</summary><div class="reads">${a.reads.map(r => `<div class="read"><div class="avatar" style="--c:${r.P.color}" aria-hidden="true">${r.P.sigil}</div><div><b>${r.P.name}</b>${r.width < 1 ? `<span class="w">${pctTop(r.width)}</span>` : ''}<p>${r.line}</p></div></div>`).join('')}</div></details>` : ''}
+    ${a.reads.length ? `<details class="fold-out"><summary>What the bots might have</summary><div class="reads">${a.reads.map(r => `<div class="read"><div class="avatar" style="--c:${r.P.color}" aria-hidden="true">${r.P.sigil}</div><div><b>${r.P.name}</b>${r.badge ? `<span class="w">${r.badge} hands</span>` : ''}<p>${r.line}</p></div></div>`).join('')}</div></details>` : ''}
+    ${glossaryHTML()}
+  </div>`;
+}
+function glossaryHTML() {
+  return `<details class="fold-out"><summary>What do these numbers mean?</summary><div><dl class="gloss">${GLOSSARY.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></div></details>`;
+}
+
+/* ---------- after-hand recap ---------- */
+function recapHTML() {
+  const h = G.players[0];
+  const d = h.won - h.total;
+  const mine = ui.review.filter(r => r.hand === G.handNo);
+  const title = d > 0 ? `You won ${fmt(d)} chips` : d < 0 ? `You lost ${fmt(-d)} chips` : 'You broke even';
+  const leaks = mine.filter(r => r.level === 'leak');
+  const takeaway = leaks.length ? LESSONS[leaks[0].concept] : null;
+  const allGood = mine.length && !leaks.length;
+  const icon = { good: '✓', ok: '~', leak: '✕' };
+  return `<div class="stack">
+    <div>
+      <p class="eyebrow">Hand ${G.handNo} recap</p>
+      <h2 class="h2">${title}</h2>
+      ${G.result ? `<p class="muted">${G.result.text}</p>` : ''}
+    </div>
+    ${mine.length ? `<div><p class="eyebrow">Your decisions</p><ol class="recap">${mine.map(r => `<li class="${r.level}"><span class="mk" aria-label="${r.level === 'good' ? 'Good' : r.level === 'leak' ? 'Mistake' : 'Close'}">${icon[r.level]}</span><div><b>${STREETS[r.street]} · ${r.label}</b><p>${r.text}</p></div></li>`).join('')}</ol></div>`
+                  : `<p class="muted">You didn't have to make any decisions this hand.</p>`}
+    ${allGood && d < 0 ? `<div class="lesson"><h3>Good decisions still lose sometimes</h3><p>You made the right choices and lost anyway. That's normal: a hand you win 7 in 10 times still loses 3 in 10. Keep making choices that win over time and the chips follow.</p></div>`
+      : takeaway && d > 0 ? `<div class="lesson"><h3>You won, but got lucky</h3><p>The ✕ decision above loses chips over time. It paid off this once, but make it again and again and it costs more than it wins. ${takeaway[1]}</p></div>`
+      : takeaway ? `<div class="lesson"><h3>Takeaway: ${takeaway[0]}</h3><p>${takeaway[1]}</p></div>` : ''}
+    ${profileHTML()}
   </div>`;
 }
 
@@ -256,7 +329,7 @@ function renderChart() {
     const pct = PRE[key].pct;
     cells += `<div class="${pct <= w ? 'in' : ''}${key === mine ? ' me' : ''}" style="--a:${(1 - .45 * pct / w).toFixed(2)}" title="${key}: top ${Math.max(1, Math.round(pct * 100))}%">${key}</div>`;
   }
-  const mineTxt = mine ? ` Your ${mine} is in the ${pctTop(PRE[mine].pct)}, so it's <b>${PRE[mine].pct <= w ? 'a raise' : 'a fold'}</b> from here.` : '';
+  const mineTxt = mine ? ` Your ${mine} is ${betterThan(PRE[mine].pct)}, so it's <b>${PRE[mine].pct <= w ? 'a raise' : 'a fold'}</b> from here.` : '';
   setHTML($('paneChart'), `<div>
       <p class="eyebrow">Opening ranges</p>
       <h2 class="h2">Which hands to raise first in</h2>
@@ -264,7 +337,7 @@ function renderChart() {
       <div class="chart-pos" role="group" aria-label="Position">${['UTG', 'CO', 'BTN', 'SB'].map(p => `<button type="button" data-pos="${p}" aria-pressed="${p === pos}">${p}${p === heroPos ? ' · you' : ''}</button>`).join('')}</div>
       <div class="grid13" role="img" aria-label="Starting hand chart for ${POS_LONG[pos]}">${cells}</div>
       <div class="chart-key"><span><i style="background:var(--accent)"></i>Raise</span><span><i style="background:var(--surface-2)"></i>Fold</span><span>Suited above the diagonal</span></div>
-      <p class="note">From ${POS_LONG[pos]}, open about the <b>${pctTop(w)}</b> of hands.${mineTxt}</p>
+      <p class="note">From ${POS_LONG[pos]}, raise with <b>${handsWord(w)}</b> (the best ${pctTxt(w)}) and fold the rest.${mineTxt}</p>
     </div>`);
 }
 
